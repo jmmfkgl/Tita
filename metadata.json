@@ -1,0 +1,5 @@
+{
+  "name": "Titan",
+  "description": "A powerful AI assistant capable of complex calculations, web-grounded research, and secure operations.",
+  "requestFramePermissions": ["microphone"]
+}

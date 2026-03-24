@@ -1,0 +1,107 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: /users/{userId}
+    // Document ID: userId (UID)
+    // Fields:
+    //   - uid: string (required) - Unique identifier for the user
+    //   - email: string (required, email format) - User's email address
+    //   - displayName: string (optional) - User's display name
+    //   - photoURL: string (optional) - User's profile photo URL
+    //   - createdAt: timestamp (required) - When the user was created
+    //
+    // Collection: /users/{userId}/messages/{messageId}
+    // Document ID: auto-generated
+    // Fields:
+    //   - userId: string (required) - The UID of the user who owns this message
+    //   - role: string (required, enum: ["user", "titan"]) - The role of the message sender
+    //   - content: string (required, max length 5000) - The text content of the message
+    //   - timestamp: timestamp (required) - When the message was sent
+    //   - type: string (optional, enum: ["system", "result"]) - The type of message
+    //   - groundingLinks: list (optional) - List of grounding links
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email', 'createdAt']) &&
+             hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidMessage(data, userId) {
+      return hasRequiredFields(['userId', 'role', 'content', 'timestamp']) &&
+             hasOnlyAllowedFields(['userId', 'role', 'content', 'timestamp', 'type', 'groundingLinks']) &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.role in ['user', 'titan'] &&
+             data.content is string && data.content.size() <= 5000 &&
+             data.timestamp is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && 
+                      request.resource.data.uid == resource.data.uid &&
+                      request.resource.data.createdAt == resource.data.createdAt;
+      
+      match /sessions/{sessionId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId); // Basic session metadata validation
+        
+        match /messages/{messageId} {
+          allow read: if isOwner(userId);
+          allow create: if isOwner(userId) && isValidMessage(request.resource.data, userId);
+          allow update, delete: if false; // Messages are immutable
+        }
+      }
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

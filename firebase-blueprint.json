@@ -1,0 +1,54 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique identifier for the user" },
+        "email": { "type": "string", "format": "email", "description": "User's email address" },
+        "displayName": { "type": "string", "description": "User's display name" },
+        "photoURL": { "type": "string", "description": "User's profile photo URL" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the user was created" }
+      },
+      "required": ["uid", "email"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "A single chat message",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the user who owns this message" },
+        "role": { "type": "string", "enum": ["user", "titan"], "description": "The role of the message sender" },
+        "content": { "type": "string", "description": "The text content of the message" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the message was sent" },
+        "type": { "type": "string", "enum": ["system", "result"], "description": "The type of message" },
+        "groundingLinks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "uri": { "type": "string" },
+              "title": { "type": "string" }
+            }
+          }
+        }
+      },
+      "required": ["userId", "role", "content", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile documents"
+    },
+    "/users/{userId}/sessions/{sessionId}": {
+      "schema": "ChatSession",
+      "description": "Chat session metadata"
+    },
+    "/users/{userId}/sessions/{sessionId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Messages within a specific session"
+    }
+  }
+}
